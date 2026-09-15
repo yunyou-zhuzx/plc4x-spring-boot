@@ -21,6 +21,7 @@ public class PlcParseData {
 	
 	// 后续扩展
 	private int size = 0;
+	private int countIndex = 0;
 	private Class<?> targetClass;
 	private EDataType targetType;
 	

@@ -81,6 +81,7 @@
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
 				<configuration>
+					<skip>true</skip>
 					<outputDirectory>${project.parent.basedir}/target</outputDirectory>
 				</configuration>
 			</plugin>

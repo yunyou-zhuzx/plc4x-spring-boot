@@ -109,6 +109,9 @@ public abstract class AbstractPlcSerializer implements IPLCSerializable {
 		if (Objects.nonNull(index)) {
 			dbAddress = PLCUtils.getDbAddressInMultiMode(targetClass, index);
 		}
+		if (plcVariable.type() == EDataType.LIST) {
+			return createPlcParseData(targetClass, field, plcVariable.count(), dbAddress, plcVariable.address(), plcVariable.targetType());
+		}
 		final PlcParseData plcParseData = new PlcParseData();
 		plcParseData.setField(field);
 		plcParseData.setBitMode(plcVariable.bitMode());
@@ -118,6 +121,28 @@ public abstract class AbstractPlcSerializer implements IPLCSerializable {
 		plcParseData.getRequestItem().setTagName(field.getName());
 		plcParseData.getRequestItem().setAddress(resolveAddress(dbAddress, plcVariable));
 		return List.of(plcParseData);
+	}
+	
+	private List<PlcParseData> createPlcParseData(
+		final Class<?> targetClass,
+		final Field field,
+		final Integer count,
+		final String dbAddress,
+		final String address,
+		final EDataType targetType
+	) {
+		List<PlcParseData> data = new ArrayList<>();
+		for (int i = 0; i < count; i++) {
+			final PlcParseData plcParseData = new PlcParseData();
+			plcParseData.setField(field);
+			plcParseData.setDataType(targetType);
+			plcParseData.setCount(count);
+			plcParseData.setCountIndex(i);
+			plcParseData.getRequestItem().setTagName(field.getName() + "[" + i + "]");
+			plcParseData.getRequestItem().setAddress(resolveAddress(dbAddress, address + "[" + i + "]", targetType));
+			data.add(plcParseData);
+		}
+		return data;
 	}
 	
 	@SneakyThrows
@@ -132,7 +157,24 @@ public abstract class AbstractPlcSerializer implements IPLCSerializable {
 	@SneakyThrows
 	private <T> void fillField(T targetDb, PlcParseData plcParseDatum) {
 		plcParseDatum.getField().setAccessible(true);
-		plcParseDatum.getField().set(targetDb, plcParseDatum.getResponseItem().getValue());
+		
+		boolean isList = List.class.isAssignableFrom(plcParseDatum.getField().getType());
+		if (isList) {
+			final Object obj = plcParseDatum.getField().get(targetDb);
+			if (Objects.isNull(obj)) {
+				List list = new ArrayList<>(plcParseDatum.getCount());
+				for (int i = 0; i < plcParseDatum.getCount(); i++) {
+					list.add(null);
+				}
+				list.set(plcParseDatum.getCountIndex(), plcParseDatum.getResponseItem().getValue());
+				plcParseDatum.getField().set(targetDb, list);
+				return;
+			}
+			((List) plcParseDatum.getField().get(targetDb))
+				.set(plcParseDatum.getCountIndex(), plcParseDatum.getResponseItem().getValue());
+		} else {
+			plcParseDatum.getField().set(targetDb, plcParseDatum.getResponseItem().getValue());
+		}
 	}
 	
 	@SneakyThrows
@@ -145,7 +187,22 @@ public abstract class AbstractPlcSerializer implements IPLCSerializable {
 	@SneakyThrows
 	private <T> void extractField(T targetDb, PlcParseData plcParseData, final PlcResolve plcResolve) {
 		plcParseData.getField().setAccessible(true);
+		
 		final Object targetFiledValueDb = plcParseData.getField().get(targetDb);
+		boolean isList = List.class.isAssignableFrom(plcParseData.getField().getType());
+		if (isList) {
+			if (Objects.isNull(targetFiledValueDb)) {
+				return;
+			}
+			List list = (List) targetFiledValueDb;
+			
+			if (plcParseData.getCountIndex() < list.size()) {
+				plcParseData.getResponseItem()
+					.setValue(list.get(plcParseData.getCountIndex()));
+			}
+			return;
+		}
+		
 		Object value = plcResolve.extract(targetFiledValueDb, plcParseData);
 		plcParseData.getResponseItem().setValue(value);
 	}
