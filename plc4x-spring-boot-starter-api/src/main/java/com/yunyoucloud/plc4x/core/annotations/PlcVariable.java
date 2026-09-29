@@ -94,4 +94,10 @@ public @interface PlcVariable {
 	 * @return 目标数据类型
 	 */
 	Class<?> targetClass() default EDataType.class;
+	
+	/**
+	 * 字段排序
+	 * @return 字段排序
+	 */
+	int sort() default 0;
 }
