@@ -97,7 +97,15 @@ public @interface PlcVariable {
 	
 	/**
 	 * 字段排序
+	 *
 	 * @return 字段排序
 	 */
 	int sort() default 0;
+	
+	/**
+	 * 是否只读
+	 *
+	 * @return 是否只读
+	 */
+	boolean onlyRead() default false;
 }

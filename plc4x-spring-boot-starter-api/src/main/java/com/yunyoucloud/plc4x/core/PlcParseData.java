@@ -15,6 +15,7 @@ public class PlcParseData {
 	private int count;
 	private Field field;
 	private String bits;
+	private boolean onlyRead;
 	private BitMode bitMode;
 	private RequestItem requestItem;
 	private ResponseItem responseItem;
@@ -29,6 +30,7 @@ public class PlcParseData {
 		this.dataType = EDataType.AUTO;
 		this.requestItem = new RequestItem();
 		this.responseItem = new ResponseItem();
+		this.onlyRead = false;
 	}
 	
 }

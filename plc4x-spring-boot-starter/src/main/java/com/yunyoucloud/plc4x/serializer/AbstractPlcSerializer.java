@@ -83,6 +83,7 @@ public abstract class AbstractPlcSerializer implements IPLCSerializable {
 		this.plc.write(
 			plcParseData
 				.stream()
+				.filter(item -> !item.isOnlyRead())
 				.filter(item -> Objects.nonNull(item.getResponseItem().getValue()))
 				.toList()
 		);
@@ -118,6 +119,7 @@ public abstract class AbstractPlcSerializer implements IPLCSerializable {
 		plcParseData.setBits(resolveBits(plcVariable.address()));
 		plcParseData.setDataType(plcVariable.type());
 		plcParseData.setCount(plcVariable.count());
+		plcParseData.setOnlyRead(plcVariable.onlyRead());
 		plcParseData.getRequestItem().setTagName(field.getName());
 		plcParseData.getRequestItem().setAddress(resolveAddress(dbAddress, plcVariable));
 		return List.of(plcParseData);
