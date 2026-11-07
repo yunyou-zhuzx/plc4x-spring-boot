@@ -174,3 +174,20 @@ plc4x-spring-boot-starter-api/        # API 模块
 
 - [Apache PLC4X](https://plc4x.apache.org/) - 工业协议通信库
 - [Spring Boot](https://spring.io/projects/spring-boot) - Spring Boot 框架
+
+## 连接生命周期与断线恢复
+
+`PLC` 实现了 `AutoCloseable`。短期连接请使用 `try (PLC plc = PlcManager.getPlc(config)) { ... }`；长期复用连接必须在设备移除、配置替换及应用停止时调用 `PlcManager.close(plc)`。关闭是永久操作，关闭后请创建新的 `PLC`，旧对象不会被后台读写重新打开。`destroyStaleConnection()` 仅用于故障失效，保留后续重连能力。
+
+连接失败后不再持锁休眠重试三次，而是每个冷却周期最多尝试一次。默认冷却 5000 毫秒；单点及批量读写的 Future 等待默认最多 10000 毫秒。自定义 `ConnectionConfig` 可覆盖 `reconnectIntervalMillis()` 和 `requestTimeoutMillis()`。这两个方法目前是 Java 扩展接口，不是 YAML 属性。等待上限不包括锁等待、建连握手和驱动关闭耗时。
+
+同一个 `PLC` 的读写、替换及关闭串行执行。每个客户端复用一个驱动管理器。先取得原始连接再显式 `connect()`，握手失败也会调用 `close()`；断线连接无论在线标志如何均会关闭。读写超时、异常完成、提交异常或线程中断会取消 Future 并释放连接。Future 取消本身不能替代底层通道释放。关闭失败会记录日志并保留连接引用，后续清理成功前禁止创建替代连接。调用方应复用客户端，不能在每个失败请求中重新创建客户端绕过冷却。
+
+回归测试不依赖现场设备：
+
+```shell
+mvn -Dtest=PlcLifecycleTest -Dsurefire.failIfNoSpecifiedTests=false test
+```
+
+现场直接内存耗尽还需要断电恢复长时间验证：固定设备和请求并发，循环断线/恢复，观察 Netty 存活线程、连接数及直接内存是否在预热后稳定。测试环境可启用 `-Dio.netty.leakDetection.level=paranoid` 并采集分配栈（有性能开销）；泄漏检测没有报错不能单独证明不存在泄漏。该测试类覆盖连接所有权和异常清理，不代表已证明 PLC4X/Netty 或上层业务的全部分配路径没有泄漏。
+连接复用和重连不依赖底层 `plcConnection.isConnected()`，该返回值在现场驱动中不能可靠反映断线。`PLC.isConnected()` 仅表示本地连接已建立且尚未被通信故障标记失效，不保证设备实时在线。`connect()` 正常返回后标记可用；实际读写超时或异常时标记失效、清理并进入重连冷却。静默断线会在下一次实际通信时被发现。
