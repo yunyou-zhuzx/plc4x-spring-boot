@@ -14,6 +14,12 @@
 	
 	<dependencies>
 		<dependency>
+			<groupId>org.apache.plc4x</groupId>
+			<artifactId>plc4j-spi</artifactId>
+			<version>${plc4x.version}</version>
+		</dependency>
+
+		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-web</artifactId>
 		</dependency>
