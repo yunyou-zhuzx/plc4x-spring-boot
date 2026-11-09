@@ -45,6 +45,10 @@ public class PLC implements AutoCloseable {
 	private final PlcProtocol plcProtocol;
 	private final ConnectionConfig connectionConfig;
 	private final DefaultPlcDriverManager driverManager;
+	/**
+	 * 最后一次资源清理失败，供显式关闭向调用方报告。
+	 */
+	private Exception closeFailure;
 	private boolean connected;
 	private boolean closed;
 	private long nextReconnectNanos;
@@ -124,6 +128,9 @@ public class PLC implements AutoCloseable {
 	public synchronized void close() {
 		closed = true;
 		destroyStaleConnection();
+		if (Objects.nonNull(plcConnection)) {
+			throw new IllegalStateException("PLC connection cleanup failed; retry close() before discarding this client", closeFailure);
+		}
 	}
 
 	/**
@@ -135,7 +142,7 @@ public class PLC implements AutoCloseable {
 		}
 		destroyStaleConnection();
 		if (Objects.nonNull(plcConnection)) {
-			throw new PlcConnectionException("Previous PLC connection could not be closed");
+			throw new PlcConnectionException("Previous PLC connection could not be closed", closeFailure);
 		}
 		boolean success = false;
 		try {
@@ -158,14 +165,17 @@ public class PLC implements AutoCloseable {
 	 */
 	private boolean closeConnection(final PlcConnection connection) {
 		try {
-			connection.close();
+			PlcConnectionCleaner.close(connection);
+			closeFailure = null;
 			return true;
 		} catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
-			log.warn("关闭 PLC 连接被中断", e);
+			closeFailure = e;
+			log.warn("PLC 连接清理被中断，已尝试传输层兜底", e);
 			return false;
 		} catch (Exception e) {
-			log.warn("关闭 PLC 连接失败，保留引用等待再次清理", e);
+			closeFailure = e;
+			log.error("PLC 通道兜底及关闭重试后仍未完成清理，禁止替换连接", e);
 			return false;
 		}
 	}

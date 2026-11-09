@@ -181,12 +181,12 @@ plc4x-spring-boot-starter-api/        # API 模块
 
 连接失败后不再持锁休眠重试三次，而是每个冷却周期最多尝试一次。默认冷却 5000 毫秒；单点及批量读写的 Future 等待默认最多 10000 毫秒。自定义 `ConnectionConfig` 可覆盖 `reconnectIntervalMillis()` 和 `requestTimeoutMillis()`。这两个方法目前是 Java 扩展接口，不是 YAML 属性。等待上限不包括锁等待、建连握手和驱动关闭耗时。
 
-同一个 `PLC` 的读写、替换及关闭串行执行。每个客户端复用一个驱动管理器。先取得原始连接再显式 `connect()`，握手失败也会调用 `close()`；断线连接无论在线标志如何均会关闭。读写超时、异常完成、提交异常或线程中断会取消 Future 并释放连接。Future 取消本身不能替代底层通道释放。关闭失败会记录日志并保留连接引用，后续清理成功前禁止创建替代连接。调用方应复用客户端，不能在每个失败请求中重新创建客户端绕过冷却。
+同一个 `PLC` 的读写、替换及关闭串行执行。每个客户端复用一个驱动管理器。先取得原始连接再显式 `connect()`，握手失败也会调用 `close()`；断线连接无论在线标志如何均会关闭。读写超时、异常完成、提交异常或线程中断会取消 Future 并释放连接。Future 取消本身不能替代底层通道释放。正常关闭抛异常后，先通过 `ChannelExposingConnection` 取得的通道执行传输层关闭（最多等待 2 秒），触发 PLC4X 的通道关闭回调，再重试一次驱动关闭以完成剩余清理。两次驱动关闭都失败时仍保留连接引用，后续清理成功前禁止创建替代连接。显式调用 `PLC.close()` / `PlcManager.close()` 在清理最终失败时抛出 `IllegalStateException`，调用方应保留客户端并重试关闭，不能丢弃对象或直接新建替代连接。通道关闭不等于驱动全部资源都已释放，因此不能仅凭通道关闭成功就覆盖旧引用。未暴露通道的连接仅重试驱动关闭。传输层等待上限不限制驱动 `close()` 自身的耗时。清理代码不创建后台线程池，也不直接关闭未知归属的事件循环组。调用方应复用客户端，不能在每个失败请求中重新创建客户端绕过冷却。
 
 回归测试不依赖现场设备：
 
 ```shell
-mvn -Dtest=PlcLifecycleTest -Dsurefire.failIfNoSpecifiedTests=false test
+mvn -Dtest=PlcLifecycleTest,PlcConnectionCleanerTest -Dsurefire.failIfNoSpecifiedTests=false test
 ```
 
 现场直接内存耗尽还需要断电恢复长时间验证：固定设备和请求并发，循环断线/恢复，观察 Netty 存活线程、连接数及直接内存是否在预热后稳定。测试环境可启用 `-Dio.netty.leakDetection.level=paranoid` 并采集分配栈（有性能开销）；泄漏检测没有报错不能单独证明不存在泄漏。该测试类覆盖连接所有权和异常清理，不代表已证明 PLC4X/Netty 或上层业务的全部分配路径没有泄漏。
