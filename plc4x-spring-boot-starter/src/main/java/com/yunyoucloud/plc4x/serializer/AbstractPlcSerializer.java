@@ -71,16 +71,22 @@ public abstract class AbstractPlcSerializer implements IPLCSerializable {
 		return this.fillData(db, plcParseData);
 	}
 	
+	/**
+	 * 传递底层写入确认结果；不代表设备动作已经完成。
+	 */
 	@Override
-	public <T> void write(T db) {
-		write(db, null);
+	public <T> boolean write(final T db) {
+		return write(db, null);
 	}
 	
+	/**
+	 * 传递底层写入确认结果；不代表设备动作已经完成。
+	 */
 	@Override
-	public <T> void write(T db, final Integer index) {
+	public <T> boolean write(final T db, final Integer index) {
 		final List<PlcParseData> plcParseData = parseBean(db.getClass(), index);
 		extractField(db, plcParseData, getPlcResolve());
-		this.plc.write(
+		return this.plc.write(
 			plcParseData
 				.stream()
 				.filter(item -> !item.isOnlyRead())

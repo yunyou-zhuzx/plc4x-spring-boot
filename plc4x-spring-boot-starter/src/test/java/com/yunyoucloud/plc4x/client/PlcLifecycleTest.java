@@ -236,7 +236,13 @@ class PlcLifecycleTest {
 			case "read" -> plc.read("tag", "address", Integer.class);
 			case "batchRead" -> plc.read(List.of(), null);
 			case "write" -> plc.write("tag", "address", 1);
-			case "batchWrite" -> plc.write(List.of());
+			case "batchWrite" -> {
+				final com.yunyoucloud.plc4x.core.PlcParseData item = new com.yunyoucloud.plc4x.core.PlcParseData();
+				item.getRequestItem().setTagName("tag");
+				item.getRequestItem().setAddress("address");
+				item.getResponseItem().setValue(1);
+				plc.write(List.of(item));
+			}
 			default -> throw new IllegalArgumentException(operation);
 		}
 	}

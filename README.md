@@ -191,3 +191,27 @@ mvn -Dtest=PlcLifecycleTest,PlcConnectionCleanerTest -Dsurefire.failIfNoSpecifie
 
 现场直接内存耗尽还需要断电恢复长时间验证：固定设备和请求并发，循环断线/恢复，观察 Netty 存活线程、连接数及直接内存是否在预热后稳定。测试环境可启用 `-Dio.netty.leakDetection.level=paranoid` 并采集分配栈（有性能开销）；泄漏检测没有报错不能单独证明不存在泄漏。该测试类覆盖连接所有权和异常清理，不代表已证明 PLC4X/Netty 或上层业务的全部分配路径没有泄漏。
 连接复用和重连不依赖底层 `plcConnection.isConnected()`，该返回值在现场驱动中不能可靠反映断线。`PLC.isConnected()` 仅表示本地连接已建立且尚未被通信故障标记失效，不保证设备实时在线。`connect()` 正常返回后标记可用；实际读写超时或异常时标记失效、清理并进入重连冷却。静默断线会在下一次实际通信时被发现。
+
+## 写入返回值与确认范围
+
+`PLC.write(...)`、`writeBoolean/writeInteger/...`、`IPLCSerializable.write(bean)` 及序列化器的类型写入方法现在返回 `boolean`。例如：
+
+```java
+boolean confirmed = serializer.writeInteger("ns=2;i=1001", 123);
+```
+
+- `true`：已等待写响应，本次请求的每个字段均得到 PLC4X `PlcResponseCode.OK`。
+- `false`：未取得全部字段的成功确认，包括远端错误、缺失字段状态、空响应以及无写入字段。批量部分成功不会回滚，`false` 不能理解为所有值均未写入。
+- 超时、断线、线程中断等继续抛出异常，并执行原有资源清理。请求可能已经到达设备，只是响应没有到达客户端，因此异常时写入结果可能未知。
+
+根据 [OPC UA Write 规范](https://reference.opcfoundation.org/specs/OPC-10000-4/5.11.4.1)，普通 `Good` 表示服务器报告数据源写入成功；仅写入中间系统、不能确认数据源更新时，应报告 `Good_CompletesAsynchronously`。已核对本项目 PLC4X 0.13.1 的 `OpcuaProtocolLogic.writeResponse` / `mapOpcStatusCode`：普通 `Good` 映射为 `OK`，异步完成状态映射为非 `OK`，因此不会返回 `true`。
+
+`true` 仍然是对服务器写响应的确认，没有额外读回验证，也不等于 PLC 程序已扫描并接受命令或设备动作已完成。若要确认控制逻辑已处理，应由 PLC 提供命令编号和确认编号/应答位。读回相同节点只能证明当时读取到相同值，网关可能返回缓存，不能独立证明物理设备已执行。
+
+返回类型由 `void` 变为 `boolean` 是二进制不兼容的 API 修改。原调用源码可以继续忽略返回值，但上层应用及依赖本包的模块必须重新编译；自定义 `IPLCSerializable` 实现也要更新方法签名。单点远端错误现在返回 `false`，调用方需要检查结果，不能仅依赖捕获异常。
+
+写入和连接回归测试：
+
+```shell
+mvn -Dtest=PlcWriteResultTest,PlcLifecycleTest,PlcConnectionCleanerTest -Dsurefire.failIfNoSpecifiedTests=false test
+```

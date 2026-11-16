@@ -1,5 +1,6 @@
 package com.yunyoucloud.plc4x.config.connection;
 
+import cn.hutool.core.util.StrUtil;
 import com.yunyoucloud.plc4x.core.enums.PlcProtocol;
 import lombok.Data;
 
@@ -18,6 +19,8 @@ public class S7ConnectionConfig implements ConnectionConfig {
 	
 	private Integer pduLength = 240;
 	
+	private String controllerType = "ANY";
+	
 	@Override
 	public boolean enable() {
 		return this.enable;
@@ -25,7 +28,14 @@ public class S7ConnectionConfig implements ConnectionConfig {
 	
 	@Override
 	public String address() {
-		return "s7://" + ip;
+		return StrUtil.format(
+			"s7://{}?remote-rack={}&remote-slot={}&pdu-size={}&controller-type={}",
+			ip,
+			rack,
+			slot,
+			pduLength,
+			controllerType
+		);
 	}
 	
 	@Override

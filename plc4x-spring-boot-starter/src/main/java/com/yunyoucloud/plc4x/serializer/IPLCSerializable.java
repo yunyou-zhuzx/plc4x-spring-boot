@@ -90,80 +90,90 @@ public interface IPLCSerializable {
 	 * 写入数据
 	 *
 	 * @param db DB块
+	 * @return 全部写入字段收到 OK 响应时为 true；不代表设备动作完成
 	 */
-	<T> void write(T db);
+	<T> boolean write(T db);
 	
 	/**
 	 * 写入数据
 	 *
 	 * @param db    DB块
 	 * @param index 索引
+	 * @return 全部写入字段收到 OK 响应时为 true；不代表设备动作完成
 	 */
-	<T> void write(T db, Integer index);
+	<T> boolean write(T db, Integer index);
 	
 	/**
 	 * 写入数据
 	 *
 	 * @param address 地址
 	 * @param value   值
+	 * @return 全部写入字段收到 OK 响应时为 true；不代表设备动作完成
 	 */
-	void writeBoolean(String address, boolean value);
+	boolean writeBoolean(String address, boolean value);
 	
 	/**
 	 * 写入数据
 	 *
 	 * @param address 地址
 	 * @param value   值
+	 * @return 全部写入字段收到 OK 响应时为 true；不代表设备动作完成
 	 */
-	void writeByte(String address, byte value);
+	boolean writeByte(String address, byte value);
 	
 	/**
 	 * 写入数据
 	 *
 	 * @param address 地址
 	 * @param value   值
+	 * @return 全部写入字段收到 OK 响应时为 true；不代表设备动作完成
 	 */
-	void writeShort(String address, short value);
+	boolean writeShort(String address, short value);
 	
 	/**
 	 * 写入数据
 	 *
 	 * @param address 地址
 	 * @param value   值
+	 * @return 全部写入字段收到 OK 响应时为 true；不代表设备动作完成
 	 */
-	void writeInteger(String address, int value);
+	boolean writeInteger(String address, int value);
 	
 	/**
 	 * 写入数据
 	 *
 	 * @param address 地址
 	 * @param value   值
+	 * @return 全部写入字段收到 OK 响应时为 true；不代表设备动作完成
 	 */
-	void writeLong(String address, long value);
+	boolean writeLong(String address, long value);
 	
 	/**
 	 * 写入数据
 	 *
 	 * @param address 地址
 	 * @param value   值
+	 * @return 全部写入字段收到 OK 响应时为 true；不代表设备动作完成
 	 */
-	void writeFloat(String address, float value);
+	boolean writeFloat(String address, float value);
 	
 	/**
 	 * 写入数据
 	 *
 	 * @param address 地址
 	 * @param value   值
+	 * @return 全部写入字段收到 OK 响应时为 true；不代表设备动作完成
 	 */
-	void writeDouble(String address, double value);
+	boolean writeDouble(String address, double value);
 	
 	/**
 	 * 写入数据
 	 *
 	 * @param address 地址
 	 * @param value   值
+	 * @return 全部写入字段收到 OK 响应时为 true；不代表设备动作完成
 	 */
-	void writeString(String address, String value);
+	boolean writeString(String address, String value);
 	
 	/**
 	 * 创建PLC序列化器

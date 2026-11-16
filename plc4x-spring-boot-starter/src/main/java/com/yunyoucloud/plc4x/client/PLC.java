@@ -1,9 +1,9 @@
 package com.yunyoucloud.plc4x.client;
 
+import cn.hutool.core.collection.CollUtil;
 import com.yunyoucloud.plc4x.config.connection.ConnectionConfig;
 import com.yunyoucloud.plc4x.core.PlcParseData;
 import com.yunyoucloud.plc4x.core.RequestItem;
-import com.yunyoucloud.plc4x.core.ResponseItem;
 import com.yunyoucloud.plc4x.core.enums.PlcProtocol;
 import com.yunyoucloud.plc4x.exception.PlcReadExpection;
 import com.yunyoucloud.plc4x.exception.PlcWriteExpection;
@@ -21,6 +21,7 @@ import org.apache.plc4x.java.api.messages.PlcWriteRequest;
 import org.apache.plc4x.java.api.messages.PlcWriteResponse;
 import org.apache.plc4x.java.api.types.PlcResponseCode;
 
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -251,36 +252,60 @@ public class PLC implements AutoCloseable {
 		return read(address, String.class);
 	}
 
-	public void writeBoolean(String address, boolean value) {
-		write(address, value);
+	/**
+	 * 写入单值并返回协议确认结果，通信异常时抛出异常。
+	 */
+	public boolean writeBoolean(final String address, final boolean value) {
+		return write(address, value);
 	}
 
-	public void writeByte(String address, byte value) {
-		write(address, value);
+	/**
+	 * 写入单值并返回协议确认结果，通信异常时抛出异常。
+	 */
+	public boolean writeByte(final String address, final byte value) {
+		return write(address, value);
 	}
 
-	public void writeShort(String address, short value) {
-		write(address, value);
+	/**
+	 * 写入单值并返回协议确认结果，通信异常时抛出异常。
+	 */
+	public boolean writeShort(final String address, final short value) {
+		return write(address, value);
 	}
 
-	public void writeInteger(String address, int value) {
-		write(address, value);
+	/**
+	 * 写入单值并返回协议确认结果，通信异常时抛出异常。
+	 */
+	public boolean writeInteger(final String address, final int value) {
+		return write(address, value);
 	}
 
-	public void writeLong(String address, long value) {
-		write(address, value);
+	/**
+	 * 写入单值并返回协议确认结果，通信异常时抛出异常。
+	 */
+	public boolean writeLong(final String address, final long value) {
+		return write(address, value);
 	}
 
-	public void writeFloat(String address, float value) {
-		write(address, value);
+	/**
+	 * 写入单值并返回协议确认结果，通信异常时抛出异常。
+	 */
+	public boolean writeFloat(final String address, final float value) {
+		return write(address, value);
 	}
 
-	public void writeDouble(String address, double value) {
-		write(address, value);
+	/**
+	 * 写入单值并返回协议确认结果，通信异常时抛出异常。
+	 */
+	public boolean writeDouble(final String address, final double value) {
+		return write(address, value);
 	}
 
-	public void writeString(String address, String value) {
-		write(address, value);
+	/**
+	 * 写入单值并返回协议确认结果，通信异常时抛出异常。
+	 */
+	public boolean writeString(final String address, final String value) {
+		return write(address, value);
 	}
 
 	public <T> T read(final String address, final Class<T> returnClass) {
@@ -370,72 +395,90 @@ public class PLC implements AutoCloseable {
 		}
 	}
 
-	public <T> void write(final String address, final T value) {
-		write("tmpTag", address, value);
+	/**
+	 * 写入单值并等待字段的写响应。
+	 */
+	public <T> boolean write(final String address, final T value) {
+		return write("tmpTag", address, value);
 	}
 
+	/**
+	 * 等待写响应，仅当字段返回 OK 时返回 true；通信异常表示写入结果未确认。
+	 */
 	@SneakyThrows
-	public synchronized <T> void write(final String tagName, final String address, final T value) {
-		if (!checkAndReconnectConnection()) {
-			log.error("Unable to establish PLC connection, plc address: {}", connectionConfig.address());
-			throw new PlcConnectionException("Unable to establish PLC connection");
-		}
+	public synchronized <T> boolean write(final String tagName, final String address, final T value) {
+		ensureWriteSupported();
+		final PlcWriteRequest.Builder builder = plcConnection.writeRequestBuilder();
+		builder.addTagAddress(tagName, address, value);
+		final PlcWriteRequest request = builder.build();
+		return isWriteSuccessful(awaitWriteResponse(request), List.of(tagName));
+	}
 
-		if (!plcConnection.getMetadata().isWriteSupported()) {
-			log.error("This connection doesn't support writing, plc address: {}", connectionConfig.address());
-			throw new PlcWriteExpection("This connection doesn't support writing.");
+	/**
+	 * 批量写入所有字段均返回 OK 才成功；空请求返回 false，部分成功不会回滚。
+	 */
+	@SneakyThrows
+	public synchronized boolean write(final List<PlcParseData> plcParseDataList) {
+		if (CollUtil.isEmpty(plcParseDataList)) {
+			return false;
 		}
-
-		try {
-			final PlcWriteRequest.Builder writeRequestBuilder = this.plcConnection.writeRequestBuilder();
-			writeRequestBuilder.addTagAddress(tagName, address, value);
-			final PlcWriteRequest plcWriteRequest = writeRequestBuilder.build();
-			final PlcWriteResponse plcReadResponse = awaitResponse(plcWriteRequest::execute);
-			final PlcResponseCode responseCode = plcReadResponse.getResponseCode(tagName);
-			if (responseCode != PlcResponseCode.OK) {
-				log.warn("write address {} failed, tagName = {}, reason = {}", address, tagName, responseCode.name());
-				throw new PlcWriteExpection(String.format("tagName = %s, reason = %s", tagName, responseCode.name()));
+		final Set<String> tagNames = new HashSet<>(plcParseDataList.size());
+		for (PlcParseData data : plcParseDataList) {
+			final String tagName = Objects.requireNonNull(data.getRequestItem().getTagName(), "tagName");
+			if (!tagNames.add(tagName)) {
+				throw new IllegalArgumentException("Duplicate write tag: " + tagName);
 			}
-		} catch (ExecutionException | TimeoutException | PlcWriteExpection e) {
-			destroyStaleConnection();
+		}
+		ensureWriteSupported();
+		final PlcWriteRequest.Builder builder = plcConnection.writeRequestBuilder();
+		for (PlcParseData data : plcParseDataList) {
+			final RequestItem item = data.getRequestItem();
+			builder.addTagAddress(item.getTagName(), item.getAddress(), data.getResponseItem().getValue());
+		}
+		final PlcWriteRequest request = builder.build();
+		return isWriteSuccessful(awaitWriteResponse(request), tagNames);
+	}
+
+	/**
+	 * 保留原写入接口对超时及执行异常的包装，底层等待负责连接清理。
+	 */
+	private PlcWriteResponse awaitWriteResponse(final PlcWriteRequest request) throws InterruptedException {
+		try {
+			return awaitResponse(request::execute);
+		} catch (ExecutionException | TimeoutException e) {
 			throw new RuntimeException(e);
 		}
 	}
 
-	@SneakyThrows
-	public synchronized void write(final List<PlcParseData> plcParseDataList) {
+	/**
+	 * 写入前检查本地连接生命周期及驱动能力。
+	 */
+	private void ensureWriteSupported() throws PlcConnectionException {
 		if (!checkAndReconnectConnection()) {
-			log.error("Unable to establish PLC connection, plc address: {}", connectionConfig.address());
 			throw new PlcConnectionException("Unable to establish PLC connection");
 		}
-
 		if (!plcConnection.getMetadata().isWriteSupported()) {
-			log.error("This connection doesn't support writing, plc address: {}", connectionConfig.address());
 			throw new PlcWriteExpection("This connection doesn't support writing.");
 		}
+	}
 
-		try {
-			final PlcWriteRequest.Builder writeRequestBuilder = this.plcConnection.writeRequestBuilder();
-
-			for (PlcParseData plcParseData : plcParseDataList) {
-				final RequestItem requestItem = plcParseData.getRequestItem();
-				final ResponseItem responseItem = plcParseData.getResponseItem();
-				writeRequestBuilder.addTagAddress(requestItem.getTagName(), requestItem.getAddress(), responseItem.getValue());
-			}
-
-			final PlcWriteRequest plcWriteRequest = writeRequestBuilder.build();
-			final PlcWriteResponse plcWriteResponse = awaitResponse(plcWriteRequest::execute);
-
-			for (String tagName : plcWriteResponse.getTagNames()) {
-				final PlcResponseCode responseCode = plcWriteResponse.getResponseCode(tagName);
-				if (responseCode != PlcResponseCode.OK) {
-					log.error("写入PLC数据失败：tagName = {}, reason = {}", tagName, responseCode.name());
-				}
-			}
-		} catch (ExecutionException | TimeoutException | PlcWriteExpection e) {
-			destroyStaleConnection();
-			throw new RuntimeException(e);
+	/**
+	 * 按请求字段检查结果，避免空响应、缺失状态或部分成功被误报为成功。
+	 */
+	private boolean isWriteSuccessful(final PlcWriteResponse response, final Collection<String> tagNames) {
+		if (Objects.isNull(response)) {
+			log.warn("PLC 写响应为空，无法确认写入结果");
+			return false;
 		}
+		boolean success = true;
+		for (String tagName : tagNames) {
+			final PlcResponseCode code = response.getResponseCode(tagName);
+			if (code != PlcResponseCode.OK) {
+				log.warn("PLC 写入未确认成功: tagName = {}, responseCode = {}", tagName, code);
+				success = false;
+			}
+		}
+		return success;
 	}
 
 	public <T> T resolvePlcValue(final String tagName, final PlcReadResponse plcReadResponse, final Class<T> returnClass) {

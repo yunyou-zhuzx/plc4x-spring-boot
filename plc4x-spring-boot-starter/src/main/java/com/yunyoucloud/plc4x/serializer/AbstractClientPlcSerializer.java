@@ -8,6 +8,8 @@ import com.yunyoucloud.plc4x.resolve.PlcResolve;
 import lombok.SneakyThrows;
 import org.apache.plc4x.java.api.messages.PlcReadResponse;
 
+import java.util.Objects;
+
 public abstract class AbstractClientPlcSerializer extends AbstractPlcSerializer {
 	
 	public AbstractClientPlcSerializer(final PLC plc) {
@@ -70,44 +72,68 @@ public abstract class AbstractClientPlcSerializer extends AbstractPlcSerializer 
 		return singleRead(address, String.class, EDataType.STRING);
 	}
 	
+	/**
+	 * 传递底层写入确认结果；不代表设备动作已经完成。
+	 */
 	@Override
-	public void writeBoolean(String address, boolean value) {
-		singleWrite(address, value, EDataType.BOOL);
+	public boolean writeBoolean(final String address, final boolean value) {
+		return singleWrite(address, value, EDataType.BOOL);
 	}
 	
+	/**
+	 * 传递底层写入确认结果；不代表设备动作已经完成。
+	 */
 	@Override
-	public void writeByte(String address, byte value) {
-		singleWrite(address, value, EDataType.BYTE);
+	public boolean writeByte(final String address, final byte value) {
+		return singleWrite(address, value, EDataType.BYTE);
 	}
 	
+	/**
+	 * 传递底层写入确认结果；不代表设备动作已经完成。
+	 */
 	@Override
-	public void writeShort(String address, short value) {
-		singleWrite(address, value, EDataType.INT16);
+	public boolean writeShort(final String address, final short value) {
+		return singleWrite(address, value, EDataType.INT16);
 	}
 	
+	/**
+	 * 传递底层写入确认结果；不代表设备动作已经完成。
+	 */
 	@Override
-	public void writeInteger(String address, int value) {
-		singleWrite(address, value, EDataType.INT32);
+	public boolean writeInteger(final String address, final int value) {
+		return singleWrite(address, value, EDataType.INT32);
 	}
 	
+	/**
+	 * 传递底层写入确认结果；不代表设备动作已经完成。
+	 */
 	@Override
-	public void writeLong(String address, long value) {
-		singleWrite(address, value, EDataType.INT64);
+	public boolean writeLong(final String address, final long value) {
+		return singleWrite(address, value, EDataType.INT64);
 	}
 	
+	/**
+	 * 传递底层写入确认结果；不代表设备动作已经完成。
+	 */
 	@Override
-	public void writeFloat(String address, float value) {
-		singleWrite(address, value, EDataType.FLOAT32);
+	public boolean writeFloat(final String address, final float value) {
+		return singleWrite(address, value, EDataType.FLOAT32);
 	}
 	
+	/**
+	 * 传递底层写入确认结果；不代表设备动作已经完成。
+	 */
 	@Override
-	public void writeDouble(String address, double value) {
-		singleWrite(address, value, EDataType.FLOAT64);
+	public boolean writeDouble(final String address, final double value) {
+		return singleWrite(address, value, EDataType.FLOAT64);
 	}
 	
+	/**
+	 * 传递底层写入确认结果；不代表设备动作已经完成。
+	 */
 	@Override
-	public void writeString(String address, String value) {
-		singleWrite(address, value, EDataType.STRING);
+	public boolean writeString(final String address, final String value) {
+		return singleWrite(address, value, EDataType.STRING);
 	}
 	
 	public <T> T singleRead(final String address, final Class<T> tClass, final EDataType eDataType) {
@@ -117,15 +143,18 @@ public abstract class AbstractClientPlcSerializer extends AbstractPlcSerializer 
 		return plc.read(resolveAddress("", address, eDataType), tClass);
 	}
 	
-	public <T> void singleWrite(final String address, final T value, final EDataType eDataType) {
-		if (eDataType == null) {
+	/**
+	 * 转换地址和值后写入，并返回底层协议确认结果。
+	 */
+	public <T> boolean singleWrite(final String address, final T value, final EDataType eDataType) {
+		if (Objects.isNull(eDataType)) {
 			throw new PlcCommExpection("类型不正确");
 		}
 		final PlcParseData plcParseData = new PlcParseData();
 		plcParseData.setDataType(eDataType);
 		plcParseData.setBits(resolveBits(address));
 		plcParseData.getRequestItem().setAddress(address);
-		plc.write(resolveAddress("", address, eDataType), getPlcResolve().extract(value, plcParseData));
+		return plc.write(resolveAddress("", address, eDataType), getPlcResolve().extract(value, plcParseData));
 	}
 	
 }
