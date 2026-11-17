@@ -2,6 +2,7 @@ package com.yunyoucloud.plc4x.client;
 
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
+import io.netty.channel.embedded.EmbeddedChannel;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.plc4x.java.api.PlcConnection;
 import org.apache.plc4x.java.api.exceptions.PlcConnectionException;
@@ -31,12 +32,13 @@ final class PlcConnectionCleaner {
 		try {
 			final Channel channel = connection instanceof ChannelExposingConnection exposing
 					? exposing.getChannel() : null;
-			if (Objects.nonNull(channel) && channel.eventLoop().inEventLoop()) {
+			if (Objects.nonNull(channel) && !(channel instanceof EmbeddedChannel) && channel.eventLoop().inEventLoop()) {
 				channel.close();
 				throw new PlcConnectionException("PLC cleanup must be completed outside the channel event loop");
 			}
 			try {
 				connection.close();
+				releaseEmbeddedChannel(channel);
 				return;
 			} catch (Exception firstFailure) {
 				interrupted |= Thread.interrupted() || firstFailure instanceof InterruptedException;
@@ -49,6 +51,7 @@ final class PlcConnectionCleaner {
 				}
 				try {
 					connection.close();
+					releaseEmbeddedChannel(channel);
 				} catch (Exception retryFailure) {
 					interrupted |= Thread.interrupted() || retryFailure instanceof InterruptedException;
 					if (!Objects.equals(firstFailure, retryFailure)) {
@@ -71,12 +74,25 @@ final class PlcConnectionCleaner {
 		if (Objects.isNull(channel)) {
 			return;
 		}
+		if (channel instanceof EmbeddedChannel) {
+			releaseEmbeddedChannel(channel);
+			return;
+		}
 		final ChannelFuture future = channel.close();
 		if (!future.awaitUninterruptibly(CHANNEL_CLOSE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
 			throw new PlcConnectionException("Timed out closing PLC transport channel");
 		}
 		if (!future.isSuccess()) {
 			throw new PlcConnectionException("Failed to close PLC transport channel", future.cause());
+		}
+	}
+
+	/**
+	 * S7H 暴露的是虚拟通道，其事件循环对任意线程均返回 true；关闭后还需释放队列缓冲区。
+	 */
+	private static void releaseEmbeddedChannel(final Channel channel) {
+		if (channel instanceof EmbeddedChannel embedded) {
+			embedded.finishAndReleaseAll();
 		}
 	}
 

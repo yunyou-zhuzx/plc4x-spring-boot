@@ -1,5 +1,8 @@
 package com.yunyoucloud.plc4x.client;
 
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
+import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.EventLoop;
@@ -135,6 +138,32 @@ class PlcConnectionCleanerTest {
 
 		verify(channel).close();
 		verify(connection, never()).close();
+	}
+
+	/**
+	 * S7H 虚拟事件循环在主线程也返回 true，不应因此阻止关闭物理连接及释放队列。
+	 */
+	@Test
+	void embeddedChannelAllowsDriverCleanupAndReleasesBuffers() throws Exception {
+		for (boolean failFirstClose : new boolean[]{false, true}) {
+			final EmbeddedChannel channel = new EmbeddedChannel();
+			final ByteBuf queued = Unpooled.buffer().writeByte(1);
+			channel.writeOutbound(queued);
+			final PlcConnection connection = nettyConnection();
+			when(((ChannelExposingConnection) connection).getChannel()).thenReturn(channel);
+			if (failFirstClose) {
+				doThrow(new PlcConnectionException("first close failed")).doNothing().when(connection).close();
+			}
+			try {
+				assertTrue(channel.eventLoop().inEventLoop());
+				PlcConnectionCleaner.close(connection);
+				verify(connection, times(failFirstClose ? 2 : 1)).close();
+				assertFalse(channel.isOpen());
+				assertEquals(0, queued.refCnt());
+			} finally {
+				channel.finishAndReleaseAll();
+			}
+		}
 	}
 
 	/**

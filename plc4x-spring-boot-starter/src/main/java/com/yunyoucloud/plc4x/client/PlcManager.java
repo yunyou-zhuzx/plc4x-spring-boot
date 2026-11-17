@@ -5,7 +5,11 @@ import com.yunyoucloud.plc4x.config.connection.ConnectionConfig;
 public class PlcManager {
 
 	public static PLC getPlc(final ConnectionConfig connectionConfig) {
-		return new PLC(connectionConfig);
+		return getPlc(connectionConfig, true);
+	}
+
+	public static PLC getPlc(final ConnectionConfig connectionConfig, final boolean connectImmediately) {
+		return new PLC(connectionConfig, connectImmediately);
 	}
 
 	public static boolean reconnect(final PLC plc) {

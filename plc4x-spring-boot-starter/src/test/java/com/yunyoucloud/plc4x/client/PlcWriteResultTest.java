@@ -137,10 +137,10 @@ class PlcWriteResultTest {
 	}
 
 	/**
-	 * 超时代表结果未确认，并取消本地等待及释放旧连接。
+	 * 超时代表结果未确认，取消本地等待但保留尚未确认断开的连接。
 	 */
 	@Test
-	void timeoutDoesNotReportSuccessAndClosesConnection() throws Exception {
+	void timeoutDoesNotReportSuccessAndKeepsConnection() throws Exception {
 		when(config.requestTimeoutMillis()).thenReturn(1L);
 		final CompletableFuture<PlcWriteResponse> pending = new CompletableFuture<>();
 		doReturn(pending).when(request).execute();
@@ -148,16 +148,16 @@ class PlcWriteResultTest {
 		final RuntimeException failure = assertThrows(RuntimeException.class, () -> plc.write("address", 1));
 		assertInstanceOf(TimeoutException.class, failure.getCause());
 		assertTrue(pending.isCancelled());
-		verify(connection).close();
-		assertFalse(plc.isConnected());
+		verify(connection, never()).close();
+		assertTrue(plc.isConnected());
 	}
 
 	/**
-	 * 响应异常保留原有异常包装并释放连接，不能降级为写入成功。
+	 * 明确断链时保留原有异常包装并释放连接，不能降级为写入成功。
 	 */
 	@Test
 	void exceptionalResponsePreservesFailureAndClosesConnection() throws Exception {
-		doReturn(CompletableFuture.failedFuture(new IllegalStateException("disconnected"))).when(request).execute();
+		doReturn(CompletableFuture.failedFuture(new java.nio.channels.ClosedChannelException())).when(request).execute();
 		final PLC plc = new PLC(config, manager);
 		final RuntimeException failure = assertThrows(RuntimeException.class, () -> plc.write("address", 1));
 		assertInstanceOf(ExecutionException.class, failure.getCause());
