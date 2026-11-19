@@ -44,6 +44,11 @@ import java.util.function.Supplier;
 @Getter
 @SuppressWarnings("unchecked")
 public class PLC implements AutoCloseable {
+
+	/**
+	 * 同一应用类加载器中的客户端共享驱动注册表，各设备连接仍独立管理。
+	 */
+	private static final DefaultPlcDriverManager SHARED_DRIVER_MANAGER = new DefaultPlcDriverManager();
 	
 	/**
 	 * 当前连接的所有权由本对象管理，所有替换和关闭均使用同一把锁。
@@ -71,7 +76,7 @@ public class PLC implements AutoCloseable {
 	));
 	
 	public PLC(final ConnectionConfig connectionConfig) {
-		this(connectionConfig, new DefaultPlcDriverManager(), true);
+		this(connectionConfig, SHARED_DRIVER_MANAGER, true);
 	}
 	
 	/**
@@ -85,7 +90,7 @@ public class PLC implements AutoCloseable {
 	 * 延迟连接时先交付对象所有权，初次握手失败仍可由调用方继续清理。
 	 */
 	public PLC(final ConnectionConfig connectionConfig, final boolean connectImmediately) {
-		this(connectionConfig, new DefaultPlcDriverManager(), connectImmediately);
+		this(connectionConfig, SHARED_DRIVER_MANAGER, connectImmediately);
 	}
 	
 	@SneakyThrows
