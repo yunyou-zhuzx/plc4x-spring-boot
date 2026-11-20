@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 final class PlcConnectionCleaner {
 	/**
-	 * 传输层关闭等待上限；驱动自身的关闭等待由 PLC4X 控制。
+	 * 单次传输层关闭等待上限，外层生命周期执行器另行限制完整清理等待时间。
 	 */
 	private static final long CHANNEL_CLOSE_TIMEOUT_SECONDS = 2;
 
@@ -37,7 +37,9 @@ final class PlcConnectionCleaner {
 				throw new PlcConnectionException("PLC cleanup must be completed outside the channel event loop");
 			}
 			try {
-				connection.close();
+				if (!ManagedTcpChannelFactory.closeInactive(connection)) {
+					connection.close();
+				}
 				releaseEmbeddedChannel(channel);
 				return;
 			} catch (Exception firstFailure) {
@@ -50,7 +52,9 @@ final class PlcConnectionCleaner {
 					addSuppressed(cleanupFailure, transportFailure);
 				}
 				try {
-					connection.close();
+					if (!ManagedTcpChannelFactory.closeInactive(connection)) {
+						connection.close();
+					}
 					releaseEmbeddedChannel(channel);
 				} catch (Exception retryFailure) {
 					interrupted |= Thread.interrupted() || retryFailure instanceof InterruptedException;

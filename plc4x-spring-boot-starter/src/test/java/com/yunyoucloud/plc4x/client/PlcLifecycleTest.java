@@ -42,7 +42,9 @@ class PlcLifecycleTest {
 		config = mock(ConnectionConfig.class);
 		when(config.address()).thenReturn("s7://localhost");
 		when(config.protocol()).thenReturn(PlcProtocol.values()[0]);
-		when(config.requestTimeoutMillis()).thenReturn(1L);
+		when(config.requestTimeoutMillis()).thenReturn(100L);
+		when(config.connectTimeoutMillis()).thenReturn(5000L);
+		when(config.closeTimeoutMillis()).thenReturn(5000L);
 		when(config.reconnectIntervalMillis()).thenReturn(5000L);
 		when(manager.getDriverForUrl(anyString())).thenReturn(driver);
 		when(driver.getConnection(anyString())).thenReturn(connection);
@@ -50,6 +52,67 @@ class PlcLifecycleTest {
 		when(metadata.isReadSupported()).thenReturn(true);
 		when(metadata.isWriteSupported()).thenReturn(true);
 		when(connection.getMetadata()).thenReturn(metadata);
+	}
+
+	@Test
+	void singleReadReportsFieldErrorInsteadOfNullAndRetainsConnection() throws Exception {
+		final PlcReadResponse response = mock(PlcReadResponse.class);
+		when(response.getResponseCode("tag")).thenReturn(org.apache.plc4x.java.api.types.PlcResponseCode.INVALID_ADDRESS);
+		prepareRequests(CompletableFuture.completedFuture(response), new CompletableFuture<>());
+		try (final PLC plc = new PLC(config, manager)) {
+			assertThrows(com.yunyoucloud.plc4x.exception.PlcReadExpection.class, () -> plc.read("tag", "address", Integer.class));
+			verify(connection, never()).close();
+			assertTrue(plc.isConnected());
+		}
+	}
+
+	@Test
+	void characterReadConvertsUnsignedByteToCharacter() throws Exception {
+		final PlcReadResponse response = mock(PlcReadResponse.class);
+		when(response.getResponseCode("tag")).thenReturn(org.apache.plc4x.java.api.types.PlcResponseCode.OK);
+		when(response.getByte("tag")).thenReturn((byte) 0xff);
+		prepareRequests(CompletableFuture.completedFuture(response), new CompletableFuture<>());
+		try (final PLC plc = new PLC(config, manager)) {
+			assertEquals(Character.valueOf('\u00ff'), plc.read("tag", "address", Character.class));
+		}
+	}
+
+	@Test
+	void emptyOrDuplicateBatchReadNeverConnects() {
+		final PLC plc = new PLC(config, manager, false);
+		plc.read(List.of(), null);
+		final com.yunyoucloud.plc4x.core.PlcParseData data = new com.yunyoucloud.plc4x.core.PlcParseData();
+		data.getRequestItem().setTagName("duplicate");
+		assertThrows(IllegalArgumentException.class, () -> plc.read(List.of(data, data), null));
+		verifyNoInteractions(driver);
+		plc.close();
+	}
+
+	@Test
+	void batchDecodeFailureDoesNotPartiallyReplaceSample() throws Exception {
+		final var first = new com.yunyoucloud.plc4x.core.PlcParseData();
+		first.getRequestItem().setTagName("a");
+		first.getResponseItem().setValue(10);
+		final var second = new com.yunyoucloud.plc4x.core.PlcParseData();
+		second.getRequestItem().setTagName("b");
+		second.getResponseItem().setValue(20);
+		final PlcReadResponse response = mock(PlcReadResponse.class);
+		when(response.getResponseCode(anyString())).thenReturn(org.apache.plc4x.java.api.types.PlcResponseCode.OK);
+		prepareRequests(CompletableFuture.completedFuture(response), new CompletableFuture<>());
+		final var resolver = mock(com.yunyoucloud.plc4x.resolve.PlcResolve.class);
+		final java.util.concurrent.atomic.AtomicInteger decoded = new java.util.concurrent.atomic.AtomicInteger();
+		when(resolver.resolve(any(), anyString(), same(response))).thenAnswer(invocation -> {
+			if (decoded.incrementAndGet() == 2) {
+				throw new IllegalArgumentException("invalid field encoding");
+			}
+			return 99;
+		});
+		try (final PLC plc = new PLC(config, manager)) {
+			assertThrows(IllegalArgumentException.class, () -> plc.read(List.of(first, second), resolver));
+			assertEquals(10, first.getResponseItem().getValue());
+			assertEquals(20, second.getResponseItem().getValue());
+			verify(connection, never()).close();
+		}
 	}
 
 	@Test
@@ -403,7 +466,12 @@ class PlcLifecycleTest {
 	private void invoke(final PLC plc, final String operation) {
 		switch (operation) {
 			case "read" -> plc.read("tag", "address", Integer.class);
-			case "batchRead" -> plc.read(List.of(), null);
+			case "batchRead" -> {
+				final com.yunyoucloud.plc4x.core.PlcParseData item = new com.yunyoucloud.plc4x.core.PlcParseData();
+				item.getRequestItem().setTagName("tag");
+				item.getRequestItem().setAddress("address");
+				plc.read(List.of(item), mock(com.yunyoucloud.plc4x.resolve.PlcResolve.class));
+			}
 			case "write" -> plc.write("tag", "address", 1);
 			case "batchWrite" -> {
 				final com.yunyoucloud.plc4x.core.PlcParseData item = new com.yunyoucloud.plc4x.core.PlcParseData();

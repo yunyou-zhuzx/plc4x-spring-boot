@@ -33,6 +33,20 @@ public interface ConnectionConfig {
 	}
 
 	/**
+	 * 建连阶段的等待上限，单位为毫秒。
+	 */
+	default long connectTimeoutMillis() {
+		return 10000;
+	}
+
+	/**
+	 * 一次完整关闭及兜底重试的等待上限，单位为毫秒。
+	 */
+	default long closeTimeoutMillis() {
+		return 5000;
+	}
+
+	/**
 	 * 失败后的重连冷却时间，单位为毫秒。
 	 */
 	default long reconnectIntervalMillis() {

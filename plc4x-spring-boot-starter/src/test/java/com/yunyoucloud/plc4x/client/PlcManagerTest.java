@@ -50,7 +50,7 @@ class PlcManagerTest {
 	void concurrentClientsShareOneDriverManager() throws Exception {
 		final ConnectionConfig config = connectionConfig();
 		final ThreadPoolExecutor executor = new ThreadPoolExecutor(4, 4, 0, TimeUnit.SECONDS,
-			new ArrayBlockingQueue<>(32));
+				new ArrayBlockingQueue<>(32));
 		final CountDownLatch start = new CountDownLatch(1);
 		final List<Future<DefaultPlcDriverManager>> tasks = new ArrayList<>(32);
 		try {
@@ -80,6 +80,9 @@ class PlcManagerTest {
 		final ConnectionConfig config = mock(ConnectionConfig.class);
 		when(config.protocol()).thenReturn(PlcProtocol.values()[0]);
 		when(config.reconnectIntervalMillis()).thenReturn(5000L);
+		when(config.requestTimeoutMillis()).thenReturn(5000L);
+		when(config.connectTimeoutMillis()).thenReturn(5000L);
+		when(config.closeTimeoutMillis()).thenReturn(5000L);
 		return config;
 	}
 }

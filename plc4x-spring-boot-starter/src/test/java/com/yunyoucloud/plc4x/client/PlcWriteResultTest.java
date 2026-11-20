@@ -46,6 +46,8 @@ class PlcWriteResultTest {
 		when(config.address()).thenReturn("opcua:tcp://localhost:4840");
 		when(config.protocol()).thenReturn(PlcProtocol.OPCUA);
 		when(config.requestTimeoutMillis()).thenReturn(5000L);
+		when(config.connectTimeoutMillis()).thenReturn(5000L);
+		when(config.closeTimeoutMillis()).thenReturn(5000L);
 		when(config.reconnectIntervalMillis()).thenReturn(5000L);
 		when(manager.getDriverForUrl(anyString())).thenReturn(driver);
 		when(driver.getConnection(anyString())).thenReturn(connection);

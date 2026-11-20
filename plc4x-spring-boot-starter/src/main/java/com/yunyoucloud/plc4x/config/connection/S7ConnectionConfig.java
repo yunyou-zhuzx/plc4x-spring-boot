@@ -29,8 +29,9 @@ public class S7ConnectionConfig implements ConnectionConfig {
 	@Override
 	public String address() {
 		return StrUtil.format(
-			"s7://{}?remote-rack={}&remote-slot={}&pdu-size={}&controller-type={}",
+			"s7://{}:{}?remote-rack={}&remote-slot={}&pdu-size={}&controller-type={}",
 			ip,
+			port,
 			rack,
 			slot,
 			pduLength,
